@@ -1,0 +1,196 @@
+#Problem 5.5
+''' Apply the secant method to obtain the stable geometric structure of clusters of ions (Na^{+})_{n}(Cl^{−})_{m},
+    where n and m are small positive integers.
+     Use the empirical interaction potential given in Eq. (5.64) at book for the ions '''
+
+#Imported packages for furhter use.
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+from scipy.constants import e,epsilon_0
+
+
+
+
+r_1=[[0.13,0.14,0.15],
+     [0.35,0.34,0.36],
+     [0.76,0.86,0.95]]
+
+r_2=[[0.29,0.25,0.23],
+     [0.45,0.56,0.65],
+     [0.73,0.83,0.9,]]
+
+r_1_backward_test=[[0.0,0.0,0.0],
+                    [1,1,1],
+                    [2,2,2]]
+
+r_2_backward_test=[[1,1,1],
+                    [3,4,3],
+                    [2.1,2.1,2.1]]
+
+
+c_r=[1,-1,1]
+
+def r(x,y,z):
+    return math.sqrt(x**2+y**2+z**2)
+
+
+
+def V(r_i,r_j,charge_i,charge_j):
+    # Input as two float values
+    rij = math.sqrt(
+        (r_j[2] - r_i[2]) ** 2 + (r_j[1] - r_i[1]) ** 2 + (r_j[0] - r_i[0]) ** 2)  # distance between two points
+    V_0 = 1.09 * 10 ** 3  # Ev
+    r_0 = 0.321  # Angstrom
+
+    if charge_i*charge_j<0:
+        n_ij=-1
+        delta_ij=1
+    elif charge_i*charge_j>0:
+        n_ij = 1
+        delta_ij = 0
+
+
+
+    #Vij=n_ij*((e**2)/(rij))+delta_ij*V_0*math.exp(-rij/r_0)
+
+    energy_joules = (charge_i * charge_j * e ** 2) / (4 * np.pi * epsilon_0 * rij * 1e-10)
+    energy_eV = energy_joules / 1.602e-19
+    Vij=energy_eV+delta_ij*V_0*math.exp(-rij/r_0)
+
+    return Vij
+
+
+def U(r_array,charge_array):
+    V_total=0
+    for i in range(len(r_array)):
+        for j in range(i+1,len(r_array)):
+            Vij=V(r_array[i],r_array[j],charge_array[i],charge_array[j])
+            V_total+=Vij
+    return V_total
+
+
+def matrix_copy(array,start=0):
+    '''This function copies any matrix to another dummy matrix and returns as matrix array.
+    Input -  2D array:
+    Return -  2D array of same variables.'''
+
+    new_array=[] #Zero dummy matrix.
+
+    for i in range(len(array)):
+        new_row=[] #Zero row matrix
+        for j in range(len(array[i])):
+            new_row.append(array[i][j])
+        new_array.append(new_row)
+    return new_array
+
+
+def generate_first_order_diff_matrix(multivariable_function,r_data,charge_data,tolerance=0.0001):
+    matrix=[]
+    for j in range(len(r_data)):
+        r_dif_data=[]
+
+        for i in range(len(r_data)):
+            if j==i:
+                r_dif_data.append([r_data[i][0]+tolerance,r_data[i][1]+tolerance,r_data[i][2]+tolerance])
+            else:
+                r_dif_data.append(r_data[i])
+
+        der1=float(multivariable_function(r_dif_data,charge_data)-multivariable_function(r_data,charge_data))/(r(tolerance,tolerance,tolerance))
+        matrix.append(der1)
+    return matrix
+
+
+def first_diff(f,x1,charge_ar,tolerance=0.00001):
+    return float(f(x1+tolerance,charge_ar)-f(x1,charge_ar))/float(tolerance)
+
+def generate_backward_diff_matrix(first_order_diff,function,r_data0,r_data1,charge_ar):
+    backward_second_diff=[]
+    for j in range(len(r_data0)):
+        r_back_dif_data=[]
+        r_back_dif_x_data = matrix_copy(r_data1)
+
+        r_back_dif_y_data = matrix_copy(r_data1)
+        r_back_dif_z_data = matrix_copy(r_data1)
+
+        for i in range(len(r_data0)):
+
+            if j == i:
+                r_back_dif_data.append(r_data0[i])
+                r_back_dif_x_data[i][0]=r_data0[i][0]
+                r_back_dif_y_data[i][1] = r_data0[i][1]
+                r_back_dif_z_data[i][2] = r_data0[i][2]
+
+                difference_x=r_data1[i][0]-r_data0[i][0]
+                difference_y=r_data1[i][1]-r_data0[i][1]
+                difference_z=r_data1[i][2]-r_data0[i][2]
+
+            else:
+                r_back_dif_data.append(r_data1[i])
+
+
+        r1_x=first_order_diff(function, r_data1, charge_ar)
+        r0_x=first_order_diff(function, r_back_dif_x_data, charge_ar)
+        backward_diff_x=float(r1_x[j]-r0_x[j])/float(difference_x)
+
+        r1_y = first_order_diff(function, r_data1, charge_ar)
+        r0_y = first_order_diff(function, r_back_dif_y_data, charge_ar)
+        backward_diff_y = float(r1_y[j] - r0_y[j]) / float(difference_y)
+
+        r1_z = first_order_diff(function, r_data1, charge_ar)
+        r0_z = first_order_diff(function, r_back_dif_z_data, charge_ar)
+        backward_diff_z = float(r1_z[j] - r0_z[j]) / float(difference_z)
+
+        backward_second_diff.append([backward_diff_x,backward_diff_y,backward_diff_z])
+
+    return backward_second_diff
+
+
+
+
+
+def generate_multivariable_second_method(generate_backward_diff_matrix,generate_first_order_diff_matrix,U,r_data0,r_data1,charge_data,tolerance=0.001):
+    iteration = 1
+    while True:
+
+        first_derivative_function = generate_first_order_diff_matrix(U, r_data1, charge_data)
+
+
+        backward_diff_function = generate_backward_diff_matrix(generate_first_order_diff_matrix, U, r_data0, r_data1,
+                                                               charge_data)
+
+        inverse_backward_diff_function = []
+        for i in backward_diff_function:
+            inverse_backward_diff_function.append([1 / i[0], 1/i[1], 1/i[2]])
+
+
+        for i in range(len(r_data0)):
+            identity_first_derivative_function_for_every_iteration=np.identity((3))
+            for j in range(len(identity_first_derivative_function_for_every_iteration)):
+                identity_first_derivative_function_for_every_iteration[j][j]=first_derivative_function[i]
+            temprorary_r_data_1=r_data1[i]
+            temprorary_r_data__new = temprorary_r_data_1 - np.matmul(identity_first_derivative_function_for_every_iteration, inverse_backward_diff_function[i])
+            r_data0[i] = r_data1[i]
+            r_data1[i] = temprorary_r_data__new
+
+        print("Iteration -", iteration, r_data1)
+        dif1=[r(i[0],i[1],i[2]) for i in r_data0]
+        dif1=np.array(dif1)
+        dif2=[r(i[0],i[1],i[2]) for i in r_data1]
+        dif2=np.array(dif2)
+        difference=abs(dif2-dif1)
+
+
+        generated_tolerance=math.sqrt(np.sum([x**2 for x in difference]))
+
+        if generated_tolerance <=0.1:
+            break
+        else:
+            pass
+
+
+        iteration=iteration+1;
+        #print("u_data",U(r_data1,charge_data))
+
+
+print(generate_multivariable_second_method(generate_backward_diff_matrix,generate_first_order_diff_matrix,U,r_1,r_2,c_r))
